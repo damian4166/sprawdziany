@@ -310,12 +310,12 @@ export default function Home() {
   const studentAnswers = activeStudentId
     ? quizState.answers.filter((answer) => answer.studentId === activeStudentId)
     : [];
-  const totalQuestions = quizState.questions.length;
   const correctAnswerCount = studentAnswers.filter((answer) => {
     const question = quizState.questions.find((item) => item.id === answer.questionId);
     return question ? isAnswerCorrect(question, answer.value) : false;
   }).length;
-  const studentScorePercent = totalQuestions > 0 ? Math.round((correctAnswerCount / totalQuestions) * 100) : 0;
+  const totalAnswered = studentAnswers.length;
+  const studentScorePercent = totalAnswered > 0 ? Math.round((correctAnswerCount / totalAnswered) * 100) : 0;
 
   const formatTimeLeft = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -543,7 +543,7 @@ export default function Home() {
                     <h3 className="text-lg font-semibold">Test zakończony</h3>
                     <p className="mt-2 text-sm">Dziękujemy za udział. Twoje odpowiedzi zostały zapisane.</p>
                     <p className="mt-2 text-sm">
-                      Twój wynik: {correctAnswerCount} / {totalQuestions} ({studentScorePercent}%)
+                      Twój wynik: {correctAnswerCount} / {totalAnswered} ({studentScorePercent}%)
                     </p>
                   </div>
                 ) : currentStudentQuestion ? (
