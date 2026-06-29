@@ -11,9 +11,9 @@ services:
       - CHOKIDAR_USEPOLLING=true
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gra-frontend.rule=Host(`sprawdziany.vps.malejka.lowicz.pl`)"
-      - "traefik.http.routers.gra-frontend.entrypoints=websecure"
-      - "traefik.http.routers.gra-frontend.tls.certresolver=myresolver"
-      - "traefik.http.services.gra-frontend-service.loadbalancer.server.port=3000"  
+      - "traefik.http.routers.sprawdziany.rule=Host(`sprawdziany.vps.malejka.lowicz.pl`)"
+      - "traefik.http.routers.sprawdziany.entrypoints=websecure"
+      - "traefik.http.routers.sprawdziany.tls.certresolver=myresolver"
+      - "traefik.http.services.sprawdziany-service.loadbalancer.server.port=3000"  
     networks:
       - proxy
