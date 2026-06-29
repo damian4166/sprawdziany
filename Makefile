@@ -12,6 +12,16 @@ endif
 
 DC = docker compose -f $(ENV_FILE)
 
+.PHONY: help
+help:
+	@echo "Dostępne komendy:"
+	@echo "  make up        - uruchom kontenery"
+	@echo "  make down      - zatrzymaj kontenery"
+	@echo "  make build     - zbuduj obrazy"
+	@echo "  make restart   - restart kontenerów"
+	@echo "  make logs      - pokaż logi"
+	@echo "  make info      - pokaż aktywne środowisko"
+	@echo "  make setup     - zaktualizuj, zbuduj i uruchom"
 
 .PHONY: setup
 setup: pull build restart info
@@ -20,7 +30,7 @@ setup: pull build restart info
 .PHONY: up
 up:
 	@echo "🚀 Uruchamianie środowiska Docker..."
-	$(DC) up -d
+	$(DC) up -d --build
 
 .PHONY: down
 down:
@@ -30,17 +40,22 @@ down:
 .PHONY: build
 build:
 	@echo "🔨 Budowanie projektu..."
-	$(DC) build 
+	$(DC) build
 
 .PHONY: restart
 restart: down up
 	@echo "🔄 Restart kontenerów docker zakończony!"
-	
 
 .PHONY: pull
 pull:
 	@echo "📥 Pobieranie aktualizacji..."
 	git pull
 
+.PHONY: logs
+logs:
+	@echo "📋 Logi kontenerów..."
+	$(DC) logs -f
+
+.PHONY: info
 info:
 	@echo "👉 Aktywne środowisko: $(ENV_NAME) ($(ENV_FILE))"

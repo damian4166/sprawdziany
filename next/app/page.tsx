@@ -1,65 +1,428 @@
-import Image from "next/image";
+"use client";
+
+import { FormEvent, useEffect, useRef, useState } from "react";
+
+import { isAnswerCorrect } from "../lib/quiz-state.mjs";
+import { isTeacherCredentialsValid } from "../lib/teacher-auth.mjs";
+
+type Role = "teacher" | "student";
+
+type Question = {
+  id: string;
+  text: string;
+  answer: string;
+  createdAt: string;
+};
+
+type Answer = {
+  id: string;
+  studentId: string;
+  questionId: string;
+  value: string;
+  createdAt: string;
+};
 
 export default function Home() {
+  const [role, setRole] = useState<Role>("teacher");
+  const [quizState, setQuizState] = useState<{ questions: Question[]; answers: Answer[] }>({
+    questions: [],
+    answers: [],
+  });
+  const [studentId, setStudentId] = useState("");
+  const [questionText, setQuestionText] = useState("");
+  const [questionAnswer, setQuestionAnswer] = useState("");
+  const [selectedQuestionId, setSelectedQuestionId] = useState("");
+  const [studentAnswer, setStudentAnswer] = useState("");
+  const [studentQuestionIndex, setStudentQuestionIndex] = useState(0);
+  const [isTestFinished, setIsTestFinished] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [teacherLogin, setTeacherLogin] = useState("");
+  const [teacherPassword, setTeacherPassword] = useState("");
+  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState(false);
+  const [teacherError, setTeacherError] = useState("");
+  const [status, setStatus] = useState("Łączenie z serwerem WebSocket...");
+  const socketRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const wsPath = process.env.NEXT_PUBLIC_WS_URL || "/api/ws";
+    const defaultWebSocketUrl =
+      typeof window !== "undefined"
+        ? new URL(wsPath, window.location.href)
+        : new URL(`ws://localhost:3000${wsPath}`);
+
+    if (typeof window !== "undefined") {
+      defaultWebSocketUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    }
+
+    const socket = new WebSocket(defaultWebSocketUrl.toString());
+    socketRef.current = socket;
+
+    socket.addEventListener("open", () => {
+      setStatus("Połączono. Odbieram aktualny stan quizu.");
+      socket.send(JSON.stringify({ type: "get-state" }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === "state") {
+          setQuizState(message.payload);
+          if (!selectedQuestionId && message.payload.questions?.[0]) {
+            setSelectedQuestionId(message.payload.questions[0].id);
+          }
+        }
+      } catch {
+        setStatus("Otrzymano nieprawidłową wiadomość z serwera.");
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      setStatus("Połączenie z serwerem zostało zamknięte.");
+    });
+
+    socket.addEventListener("error", () => {
+      setStatus("Nie udało się połączyć z serwerem WebSocket.");
+    });
+
+    return () => socket.close();
+  }, []);
+
+  useEffect(() => {
+    if (quizState.questions.length > 0 && !selectedQuestionId) {
+      setSelectedQuestionId(quizState.questions[0].id);
+    }
+  }, [quizState.questions, selectedQuestionId]);
+
+  useEffect(() => {
+    if (role !== "student" || !quizState.questions[studentQuestionIndex]) {
+      return undefined;
+    }
+
+    setTimeLeft(60);
+    const timerId = window.setInterval(() => {
+      setTimeLeft((previousTimeLeft) => {
+        if (previousTimeLeft <= 1) {
+          window.clearInterval(timerId);
+          setStatus(`Czas minął na pytanie: ${quizState.questions[studentQuestionIndex].text}`);
+          setStudentAnswer("");
+          setStudentQuestionIndex((previousIndex) =>
+            previousIndex < quizState.questions.length - 1 ? previousIndex + 1 : previousIndex
+          );
+          return 0;
+        }
+
+        return previousTimeLeft - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [role, quizState.questions, studentQuestionIndex]);
+
+  const handleAddQuestion = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!questionText.trim() || !questionAnswer.trim()) {
+      setStatus("Uzupełnij treść pytania i poprawną odpowiedź.");
+      return;
+    }
+
+    socketRef.current?.send(
+      JSON.stringify({
+        type: "add-question",
+        payload: { text: questionText.trim(), answer: questionAnswer.trim() },
+      })
+    );
+
+    setQuestionText("");
+    setQuestionAnswer("");
+    setStatus("Pytanie zostało dodane i wysłane do uczniów.");
+  };
+
+  const handleSubmitAnswer = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!studentId.trim() || !currentStudentQuestion || !studentAnswer.trim()) {
+      setStatus("Wpisz swój identyfikator, wybierz pytanie i wpisz odpowiedź.");
+      return;
+    }
+
+    socketRef.current?.send(
+      JSON.stringify({
+        type: "submit-answer",
+        payload: {
+          studentId: studentId.trim(),
+          questionId: currentStudentQuestion.id,
+          value: studentAnswer.trim(),
+        },
+      })
+    );
+
+    setStudentAnswer("");
+    setStatus(`Odpowiedź zapisana dla ${studentId.trim()}.`);
+
+    if (studentQuestionIndex >= quizState.questions.length - 1) {
+      setIsTestFinished(true);
+      setTimeLeft(0);
+      return;
+    }
+
+    setStudentQuestionIndex((previousIndex) => previousIndex + 1);
+    setTimeLeft(60);
+  };
+
+  const handleTeacherLogin = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!teacherLogin.trim() || !teacherPassword.trim()) {
+      setTeacherError("Podaj login i hasło.");
+      setIsTeacherAuthenticated(false);
+      return;
+    }
+
+    if (isTeacherCredentialsValid(teacherLogin, teacherPassword)) {
+      setIsTeacherAuthenticated(true);
+      setTeacherError("");
+      setRole("teacher");
+      setStatus("Zalogowano jako nauczyciel.");
+      return;
+    }
+
+    setIsTeacherAuthenticated(false);
+    setTeacherError("Nieprawidłowy login lub hasło.");
+  };
+
+  const handleTeacherLogout = () => {
+    setIsTeacherAuthenticated(false);
+    setTeacherLogin("");
+    setTeacherPassword("");
+    setTeacherError("");
+    setStatus("Wylogowano z panelu nauczyciela.");
+  };
+
+  const currentStudentQuestion = quizState.questions[studentQuestionIndex];
+  const formatTimeLeft = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file test8.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-8 lg:px-12">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
+        <header className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/30">
+          <p className="text-sm uppercase tracking-[0.3em] text-emerald-400">Sprawdziany online</p>
+          <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">Quiz live z odpowiedziami uczniów</h1>
+          <p className="mt-3 max-w-2xl text-base text-slate-300">
+            Nauczyciel dodaje pytania, a uczniowie odpowiadają wpisując swój identyfikator. Każda odpowiedź
+            pojawia się natychmiast po stronie nauczyciela dzięki WebSocket.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1">
+              {quizState.questions.length} pytań
+            </span>
+            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1">
+              {quizState.answers.length} odpowiedzi
+            </span>
+            <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1">{status}</span>
+          </div>
+        </header>
+
+        <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl shadow-slate-950/20 sm:p-6">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setRole("teacher")}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                role === "teacher"
+                  ? "bg-emerald-500 text-slate-950"
+                  : "bg-slate-800 text-slate-200 hover:bg-slate-700"
+              }`}
+            >
+              Widok nauczyciela
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole("student")}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                role === "student"
+                  ? "bg-sky-500 text-slate-950"
+                  : "bg-slate-800 text-slate-200 hover:bg-slate-700"
+              }`}
+            >
+              Widok ucznia
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            {role === "teacher" ? (
+              <div className="space-y-6">
+                {!isTeacherAuthenticated ? (
+                  <form onSubmit={handleTeacherLogin} className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <h2 className="text-xl font-semibold">Logowanie nauczyciela</h2>
+                    <p className="mt-2 text-sm text-slate-400">Dane logowania: login test, hasło test.</p>
+                    <div className="mt-4 space-y-3">
+                      <input
+                        value={teacherLogin}
+                        onChange={(event) => setTeacherLogin(event.target.value)}
+                        placeholder="Login"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                      />
+                      <input
+                        value={teacherPassword}
+                        onChange={(event) => setTeacherPassword(event.target.value)}
+                        placeholder="Hasło"
+                        type="password"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950"
+                      >
+                        Zaloguj się
+                      </button>
+                    </div>
+                    {teacherError ? <p className="mt-3 text-sm text-rose-400">{teacherError}</p> : null}
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                      <h2 className="text-xl font-semibold">Panel nauczyciela</h2>
+                      <button
+                        type="button"
+                        onClick={handleTeacherLogout}
+                        className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-300"
+                      >
+                        Wyloguj
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAddQuestion} className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                      <h2 className="text-xl font-semibold">Dodaj nowe pytanie</h2>
+                      <div className="mt-4 space-y-3">
+                        <input
+                          value={questionText}
+                          onChange={(event) => setQuestionText(event.target.value)}
+                          placeholder="Treść pytania"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                        />
+                        <input
+                          value={questionAnswer}
+                          onChange={(event) => setQuestionAnswer(event.target.value)}
+                          placeholder="Poprawna odpowiedź"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950"
+                        >
+                          Dodaj pytanie
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                      <h2 className="text-xl font-semibold">Aktywne pytania</h2>
+                      <div className="mt-4 space-y-3">
+                        {quizState.questions.length === 0 ? (
+                          <p className="text-sm text-slate-400">Brak pytań. Dodaj pierwsze pytanie.</p>
+                        ) : (
+                          quizState.questions.map((question: Question) => (
+                            <div key={question.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                              <p className="font-medium text-slate-100">{question.text}</p>
+                              <p className="mt-1 text-sm text-emerald-300">Odpowiedź: {question.answer}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-xl font-semibold">Odpowiedz na pytanie</h2>
+                  <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-sm text-sky-300">
+                    {formatTimeLeft(timeLeft)}
+                  </span>
+                </div>
+
+                {quizState.questions.length === 0 ? (
+                  <p className="mt-4 text-sm text-slate-400">Brak pytań. Poczekaj, aż nauczyciel doda pierwsze pytanie.</p>
+                ) : isTestFinished ? (
+                  <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-300">
+                    <h3 className="text-lg font-semibold">Test zakończony</h3>
+                    <p className="mt-2 text-sm">Dziękujemy za udział. Twoje odpowiedzi zostały zapisane.</p>
+                  </div>
+                ) : currentStudentQuestion ? (
+                  <form onSubmit={handleSubmitAnswer} className="mt-4 space-y-3">
+                    <p className="text-sm text-slate-400">
+                      Pytanie {studentQuestionIndex + 1} z {quizState.questions.length}
+                    </p>
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                      <p className="font-medium text-slate-100">{currentStudentQuestion.text}</p>
+                    </div>
+                    <input
+                      value={studentId}
+                      onChange={(event) => setStudentId(event.target.value)}
+                      placeholder="Twój identyfikator"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                    />
+                    <textarea
+                      value={studentAnswer}
+                      onChange={(event) => setStudentAnswer(event.target.value)}
+                      placeholder="Twoja odpowiedź"
+                      className="min-h-24 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950"
+                    >
+                      Wyślij odpowiedź
+                    </button>
+                  </form>
+                ) : (
+                  <p className="mt-4 text-sm text-slate-400">Wszystkie pytania zostały już pokazane.</p>
+                )}
+              </div>
+            )}
+
+            {role === "teacher" && isTeacherAuthenticated ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <h2 className="text-xl font-semibold">Odpowiedzi uczniów na żywo</h2>
+                <div className="mt-4 space-y-3">
+                  {quizState.answers.length === 0 ? (
+                    <p className="text-sm text-slate-400">Na razie nie ma jeszcze odpowiedzi.</p>
+                  ) : (
+                    quizState.answers.map((answer: Answer) => {
+                      const question = quizState.questions.find((item: Question) => item.id === answer.questionId);
+                      return (
+                        <div key={answer.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium text-slate-100">{answer.studentId}</p>
+                            <p className="text-xs text-slate-500">{new Date(answer.createdAt).toLocaleTimeString("pl-PL")}</p>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-300">{question?.text ?? "Pytanie usunięte"}</p>
+                          <p className="mt-1 text-sm text-sky-300">{answer.value}</p>
+                          {question ? (
+                            <p
+                              className={`mt-2 text-sm font-medium ${
+                                isAnswerCorrect(question, answer.value) ? "text-emerald-400" : "text-rose-400"
+                              }`}
+                            >
+                              {isAnswerCorrect(question, answer.value) ? "Poprawna odpowiedź" : "Niepoprawna odpowiedź"}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }

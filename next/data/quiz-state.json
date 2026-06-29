@@ -1,0 +1,45 @@
+{
+  "questions": [
+    {
+      "id": "question-mqz3su0w-xbs96o",
+      "text": "Ala ma kota?",
+      "answer": "tak",
+      "createdAt": "2026-06-29T10:57:31.136Z"
+    },
+    {
+      "id": "question-mqz3synm-o75o8h",
+      "text": "Ile to 1+1",
+      "answer": "2",
+      "createdAt": "2026-06-29T10:57:37.138Z"
+    },
+    {
+      "id": "question-mqz3t8ld-o8x8d0",
+      "text": "Czy lubisz programować?",
+      "answer": "tak",
+      "createdAt": "2026-06-29T10:57:50.017Z"
+    }
+  ],
+  "answers": [
+    {
+      "id": "answer-mqz3tf7z-se5toh",
+      "studentId": "Damian",
+      "questionId": "question-mqz3su0w-xbs96o",
+      "value": "tak",
+      "createdAt": "2026-06-29T10:57:58.607Z"
+    },
+    {
+      "id": "answer-mqz3tggr-kq0hnu",
+      "studentId": "Damian",
+      "questionId": "question-mqz3synm-o75o8h",
+      "value": "3",
+      "createdAt": "2026-06-29T10:58:00.220Z"
+    },
+    {
+      "id": "answer-mqz3tiqc-32xk0i",
+      "studentId": "Damian",
+      "questionId": "question-mqz3t8ld-o8x8d0",
+      "value": "tak",
+      "createdAt": "2026-06-29T10:58:03.156Z"
+    }
+  ]
+}
