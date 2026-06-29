@@ -36,6 +36,7 @@ export default function Home() {
     answers: [],
   });
   const [studentId, setStudentId] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
   const [lastStudentId, setLastStudentId] = useState("");
   const [questionText, setQuestionText] = useState("");
   const [questionType, setQuestionType] = useState<"text" | "abcd">("text");
@@ -248,8 +249,24 @@ export default function Home() {
       setIsTestFinished(true);
       setTimeLeft(0);
       setIsStudentLoggedIn(false);
+      
+      const studentEmailStored = typeof window !== "undefined" ? sessionStorage.getItem("quiz-student-email") : null;
+      
+      if (studentEmailStored) {
+        socketRef.current?.send(
+          JSON.stringify({
+            type: "send-result-email",
+            payload: {
+              studentId: normalizedId,
+              email: studentEmailStored,
+            },
+          })
+        );
+      }
+      
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("quiz-student-id");
+        sessionStorage.removeItem("quiz-student-email");
       }
       return;
     }
@@ -295,12 +312,18 @@ export default function Home() {
       return;
     }
 
+    if (!studentEmail.trim() || !studentEmail.includes("@")) {
+      setStatus("Podaj prawidłowy adres email.");
+      return;
+    }
+
     const normalizedId = studentId.trim();
     setStudentId(normalizedId);
     setLastStudentId(normalizedId);
     setIsStudentLoggedIn(true);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("quiz-student-id", normalizedId);
+      sessionStorage.setItem("quiz-student-email", studentEmail.trim());
     }
     setStatus(`Zalogowano jako ${normalizedId}.`);
   };
@@ -560,6 +583,13 @@ export default function Home() {
                           value={studentId}
                           onChange={(event) => setStudentId(event.target.value)}
                           placeholder="Twój identyfikator"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                        />
+                        <input
+                          value={studentEmail}
+                          onChange={(event) => setStudentEmail(event.target.value)}
+                          placeholder="Twój adres email"
+                          type="email"
                           className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
                         />
                         <button

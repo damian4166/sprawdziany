@@ -4,13 +4,15 @@ env ?= dev
 ifeq ($(env), dev)
 	ENV_FILE = docker-compose.yml
 	ENV_NAME = DEWELOPERSKIE
+	ENV_VARS =
 endif
 ifeq ($(env), prod)
 	ENV_FILE = docker-compose.prod.yml
 	ENV_NAME = PRODUKCYJNE
+	ENV_VARS = --env-file .env.prod
 endif
 
-DC = docker compose -f $(ENV_FILE)
+DC = docker compose $(ENV_VARS) -f $(ENV_FILE)
 
 .PHONY: help
 help:
