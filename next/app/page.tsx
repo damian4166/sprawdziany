@@ -74,7 +74,7 @@ export default function Home() {
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
-      setStatus("Połączono. Odbieram aktualny stan quizu.");
+      setStatus("Połączono. Odbieram aktualny stan quizu...");
       socket.send(JSON.stringify({ type: "get-state" }));
     });
 
