@@ -22,5 +22,5 @@ jobs:
           port: 22
           # Skrypt, który wykona się na serwerze:
           script: |
-            cd /app/gra
+            cd /app/sprawdziany
             make setup env=prod
