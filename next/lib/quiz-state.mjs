@@ -11,10 +11,25 @@ export function createInitialState() {
 
 export function addQuestion(state, question) {
   const text = question?.text?.trim();
+  const type = question?.type || 'text';
   const answer = question?.answer?.trim();
+  const options = question?.options;
 
   if (!text || !answer) {
     return state;
+  }
+
+  if (type === 'abcd') {
+    if (
+      !options ||
+      !options.A?.trim() ||
+      !options.B?.trim() ||
+      !options.C?.trim() ||
+      !options.D?.trim() ||
+      !['A', 'B', 'C', 'D'].includes(answer)
+    ) {
+      return state;
+    }
   }
 
   return {
@@ -24,7 +39,14 @@ export function addQuestion(state, question) {
       {
         id: createId('question'),
         text,
+        type,
         answer,
+        options: type === 'abcd' ? {
+          A: options.A.trim(),
+          B: options.B.trim(),
+          C: options.C.trim(),
+          D: options.D.trim(),
+        } : undefined,
         createdAt: new Date().toISOString(),
       },
     ],

@@ -10,7 +10,14 @@ type Role = "teacher" | "student";
 type Question = {
   id: string;
   text: string;
+  type?: "text" | "abcd";
   answer: string;
+  options?: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
   createdAt: string;
 };
 
@@ -30,7 +37,13 @@ export default function Home() {
   });
   const [studentId, setStudentId] = useState("");
   const [questionText, setQuestionText] = useState("");
+  const [questionType, setQuestionType] = useState<"text" | "abcd">("text");
   const [questionAnswer, setQuestionAnswer] = useState("");
+  const [optionA, setOptionA] = useState("");
+  const [optionB, setOptionB] = useState("");
+  const [optionC, setOptionC] = useState("");
+  const [optionD, setOptionD] = useState("");
+  const [correctOption, setCorrectOption] = useState<"A" | "B" | "C" | "D">("A");
   const [selectedQuestionId, setSelectedQuestionId] = useState("");
   const [studentAnswer, setStudentAnswer] = useState("");
   const [studentQuestionIndex, setStudentQuestionIndex] = useState(0);
@@ -38,6 +51,7 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [teacherLogin, setTeacherLogin] = useState("");
   const [teacherPassword, setTeacherPassword] = useState("");
+  const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState(false);
   const [teacherError, setTeacherError] = useState("");
   const [status, setStatus] = useState("Łączenie z serwerem WebSocket...");
@@ -88,10 +102,29 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedId = sessionStorage.getItem("quiz-student-id");
+      if (savedId) {
+        setStudentId(savedId);
+        setIsStudentLoggedIn(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (quizState.questions.length > 0 && !selectedQuestionId) {
       setSelectedQuestionId(quizState.questions[0].id);
     }
   }, [quizState.questions, selectedQuestionId]);
+
+  useEffect(() => {
+    if (role !== "student") {
+      return;
+    }
+
+    setStudentQuestionIndex(0);
+    setIsTestFinished(false);
+  }, [role]);
 
   useEffect(() => {
     if (role !== "student" || !quizState.questions[studentQuestionIndex]) {
@@ -121,28 +154,71 @@ export default function Home() {
   const handleAddQuestion = (event: FormEvent) => {
     event.preventDefault();
 
-    if (!questionText.trim() || !questionAnswer.trim()) {
-      setStatus("Uzupełnij treść pytania i poprawną odpowiedź.");
+    if (!questionText.trim()) {
+      setStatus("Uzupełnij treść pytania.");
       return;
     }
 
-    socketRef.current?.send(
-      JSON.stringify({
-        type: "add-question",
-        payload: { text: questionText.trim(), answer: questionAnswer.trim() },
-      })
-    );
+    if (questionType === "abcd") {
+      if (!optionA.trim() || !optionB.trim() || !optionC.trim() || !optionD.trim()) {
+        setStatus("Uzupełnij wszystkie opcje A, B, C i D.");
+        return;
+      }
+
+      socketRef.current?.send(
+        JSON.stringify({
+          type: "add-question",
+          payload: {
+            text: questionText.trim(),
+            type: "abcd",
+            options: {
+              A: optionA.trim(),
+              B: optionB.trim(),
+              C: optionC.trim(),
+              D: optionD.trim(),
+            },
+            answer: correctOption,
+          },
+        })
+      );
+    } else {
+      if (!questionAnswer.trim()) {
+        setStatus("Uzupełnij poprawną odpowiedź.");
+        return;
+      }
+
+      socketRef.current?.send(
+        JSON.stringify({
+          type: "add-question",
+          payload: {
+            text: questionText.trim(),
+            type: "text",
+            answer: questionAnswer.trim(),
+          },
+        })
+      );
+    }
 
     setQuestionText("");
     setQuestionAnswer("");
+    setOptionA("");
+    setOptionB("");
+    setOptionC("");
+    setOptionD("");
+    setCorrectOption("A");
     setStatus("Pytanie zostało dodane i wysłane do uczniów.");
   };
 
   const handleSubmitAnswer = (event: FormEvent) => {
     event.preventDefault();
 
-    if (!studentId.trim() || !currentStudentQuestion || !studentAnswer.trim()) {
-      setStatus("Wpisz swój identyfikator, wybierz pytanie i wpisz odpowiedź.");
+    if (!isStudentLoggedIn || !studentId.trim()) {
+      setStatus("Zaloguj się jako uczeń przed wysłaniem odpowiedzi.");
+      return;
+    }
+
+    if (!currentStudentQuestion || !studentAnswer.trim()) {
+      setStatus("Wybierz odpowiedź i wyślij ją.");
       return;
     }
 
@@ -197,6 +273,23 @@ export default function Home() {
     setTeacherPassword("");
     setTeacherError("");
     setStatus("Wylogowano z panelu nauczyciela.");
+  };
+
+  const handleStudentLogin = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!studentId.trim()) {
+      setStatus("Podaj swój identyfikator ucznia.");
+      return;
+    }
+
+    const normalizedId = studentId.trim();
+    setStudentId(normalizedId);
+    setIsStudentLoggedIn(true);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("quiz-student-id", normalizedId);
+    }
+    setStatus(`Zalogowano jako ${normalizedId}.`);
   };
 
   const currentStudentQuestion = quizState.questions[studentQuestionIndex];
@@ -305,12 +398,71 @@ export default function Home() {
                           placeholder="Treść pytania"
                           className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
                         />
-                        <input
-                          value={questionAnswer}
-                          onChange={(event) => setQuestionAnswer(event.target.value)}
-                          placeholder="Poprawna odpowiedź"
-                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
-                        />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block text-sm text-slate-300">
+                            Typ pytania
+                            <select
+                              value={questionType}
+                              onChange={(event) => setQuestionType(event.target.value as "text" | "abcd")}
+                              className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none"
+                            >
+                              <option value="text">Tekstowe</option>
+                              <option value="abcd">ABCD</option>
+                            </select>
+                          </label>
+                        </div>
+                        {questionType === "abcd" ? (
+                          <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <input
+                                value={optionA}
+                                onChange={(event) => setOptionA(event.target.value)}
+                                placeholder="Opcja A"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                              />
+                              <input
+                                value={optionB}
+                                onChange={(event) => setOptionB(event.target.value)}
+                                placeholder="Opcja B"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                              />
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <input
+                                value={optionC}
+                                onChange={(event) => setOptionC(event.target.value)}
+                                placeholder="Opcja C"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                              />
+                              <input
+                                value={optionD}
+                                onChange={(event) => setOptionD(event.target.value)}
+                                placeholder="Opcja D"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                              />
+                            </div>
+                            <label className="block text-sm text-slate-300">
+                              Poprawna opcja
+                              <select
+                                value={correctOption}
+                                onChange={(event) => setCorrectOption(event.target.value as "A" | "B" | "C" | "D")}
+                                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none"
+                              >
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
+                              </select>
+                            </label>
+                          </div>
+                        ) : (
+                          <input
+                            value={questionAnswer}
+                            onChange={(event) => setQuestionAnswer(event.target.value)}
+                            placeholder="Poprawna odpowiedź"
+                            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                          />
+                        )}
                         <button
                           type="submit"
                           className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950"
@@ -329,7 +481,20 @@ export default function Home() {
                           quizState.questions.map((question: Question) => (
                             <div key={question.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                               <p className="font-medium text-slate-100">{question.text}</p>
-                              <p className="mt-1 text-sm text-emerald-300">Odpowiedź: {question.answer}</p>
+                              {question.type === "abcd" && question.options ? (
+                                <div className="mt-3 space-y-2">
+                                  {(['A', 'B', 'C', 'D'] as const).map((optionKey) => (
+                                    <p key={optionKey} className="text-sm text-slate-300">
+                                      <span className="font-semibold text-slate-100">{optionKey}:</span> {question.options?.[optionKey]}
+                                    </p>
+                                  ))}
+                                  <p className="mt-2 text-sm text-emerald-300">
+                                    Poprawna opcja: {question.answer} &#8211; {question.options[question.answer as keyof typeof question.options]}
+                                  </p>
+                                </div>
+                              ) : (
+                                <p className="mt-1 text-sm text-emerald-300">Odpowiedź: {question.answer}</p>
+                              )}
                             </div>
                           ))
                         )}
@@ -362,18 +527,53 @@ export default function Home() {
                     <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                       <p className="font-medium text-slate-100">{currentStudentQuestion.text}</p>
                     </div>
-                    <input
-                      value={studentId}
-                      onChange={(event) => setStudentId(event.target.value)}
-                      placeholder="Twój identyfikator"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
-                    />
-                    <textarea
-                      value={studentAnswer}
-                      onChange={(event) => setStudentAnswer(event.target.value)}
-                      placeholder="Twoja odpowiedź"
-                      className="min-h-24 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
-                    />
+                    {!isStudentLoggedIn ? (
+                      <div className="space-y-3">
+                        <input
+                          value={studentId}
+                          onChange={(event) => setStudentId(event.target.value)}
+                          placeholder="Twój identyfikator"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleStudentLogin}
+                          className="rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950"
+                        >
+                          Zaloguj jako uczeń
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-sm text-slate-400">Zalogowany jako: {studentId}</p>
+                        {currentStudentQuestion.type === "abcd" && currentStudentQuestion.options ? (
+                          <div className="space-y-2">
+                            {(["A", "B", "C", "D"] as const).map((optionKey) => (
+                              <label key={optionKey} className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
+                                <input
+                                  type="radio"
+                                  name="answer"
+                                  value={optionKey}
+                                  checked={studentAnswer === optionKey}
+                                  onChange={(event) => setStudentAnswer(event.target.value)}
+                                  className="h-4 w-4 text-sky-500"
+                                />
+                                <span className="text-sm text-slate-100">
+                                  {optionKey}: {currentStudentQuestion.options?.[optionKey]}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <textarea
+                            value={studentAnswer}
+                            onChange={(event) => setStudentAnswer(event.target.value)}
+                            placeholder="Twoja odpowiedź"
+                            className="min-h-24 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-0"
+                          />
+                        )}
+                      </div>
+                    )}
                     <button
                       type="submit"
                       className="rounded-full bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950"
