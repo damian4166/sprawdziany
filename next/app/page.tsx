@@ -242,16 +242,15 @@ export default function Home() {
 
     setLastStudentId(normalizedId);
     setStudentAnswer("");
-    setStudentId("");
-    setIsStudentLoggedIn(false);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("quiz-student-id");
-    }
-    setStatus(`Odpowiedź zapisana dla ${normalizedId}. Wpisz identyfikator ponownie dla następnego pytania.`);
+    setStatus(`Odpowiedź zapisana dla ${normalizedId}.`);
 
     if (studentQuestionIndex >= quizState.questions.length - 1) {
       setIsTestFinished(true);
       setTimeLeft(0);
+      setIsStudentLoggedIn(false);
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("quiz-student-id");
+      }
       return;
     }
 
