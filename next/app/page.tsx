@@ -36,6 +36,7 @@ export default function Home() {
     answers: [],
   });
   const [studentId, setStudentId] = useState("");
+  const [lastStudentId, setLastStudentId] = useState("");
   const [questionText, setQuestionText] = useState("");
   const [questionType, setQuestionType] = useState<"text" | "abcd">("text");
   const [questionAnswer, setQuestionAnswer] = useState("");
@@ -227,19 +228,26 @@ export default function Home() {
       return;
     }
 
+    const normalizedId = studentId.trim();
     socketRef.current?.send(
       JSON.stringify({
         type: "submit-answer",
         payload: {
-          studentId: studentId.trim(),
+          studentId: normalizedId,
           questionId: currentStudentQuestion.id,
           value: studentAnswer.trim(),
         },
       })
     );
 
+    setLastStudentId(normalizedId);
     setStudentAnswer("");
-    setStatus(`Odpowiedź zapisana dla ${studentId.trim()}.`);
+    setStudentId("");
+    setIsStudentLoggedIn(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("quiz-student-id");
+    }
+    setStatus(`Odpowiedź zapisana dla ${normalizedId}. Wpisz identyfikator ponownie dla następnego pytania.`);
 
     if (studentQuestionIndex >= quizState.questions.length - 1) {
       setIsTestFinished(true);
@@ -290,6 +298,7 @@ export default function Home() {
 
     const normalizedId = studentId.trim();
     setStudentId(normalizedId);
+    setLastStudentId(normalizedId);
     setIsStudentLoggedIn(true);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("quiz-student-id", normalizedId);
@@ -298,8 +307,10 @@ export default function Home() {
   };
 
   const currentStudentQuestion = quizState.questions[studentQuestionIndex];
-  const normalizedStudentId = studentId.trim();
-  const studentAnswers = quizState.answers.filter((answer) => answer.studentId === normalizedStudentId);
+  const activeStudentId = studentId.trim() || lastStudentId.trim();
+  const studentAnswers = activeStudentId
+    ? quizState.answers.filter((answer) => answer.studentId === activeStudentId)
+    : [];
   const totalQuestions = quizState.questions.length;
   const correctAnswerCount = studentAnswers.filter((answer) => {
     const question = quizState.questions.find((item) => item.id === answer.questionId);
