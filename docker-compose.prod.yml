@@ -17,3 +17,7 @@ services:
       - "traefik.http.services.sprawdziany-service.loadbalancer.server.port=3000"  
     networks:
       - proxy
+
+networks:
+  proxy:
+    external: true
