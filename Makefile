@@ -9,7 +9,8 @@ endif
 ifeq ($(env), prod)
 	ENV_FILE = docker-compose.prod.yml
 	ENV_NAME = PRODUKCYJNE
-	ENV_VARS = --env-file .env.prod
+	# Czytaj .env.prod TYLKO jeśli istnieje
+	ENV_VARS = $(if $(wildcard .env.prod),--env-file .env.prod,)
 endif
 
 DC = docker compose $(ENV_VARS) -f $(ENV_FILE)

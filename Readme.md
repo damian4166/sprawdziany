@@ -78,7 +78,7 @@ make env=prod down     # Zatrzymaj
    git clone <repo-url> .
    ```
 
-5. Stwórz `.env.prod` z konfiguracją SMTP:
+5. **(Opcjonalnie)** Stwórz `.env.prod` jeśli chcesz custom SMTP:
    ```bash
    cat > .env.prod << 'EOF'
    SMTP_HOST=mail.example.com
@@ -89,6 +89,8 @@ make env=prod down     # Zatrzymaj
    SMTP_FROM=sprawdziany@example.com
    EOF
    ```
+
+   Jeśli `.env.prod` nie istnieje, aplikacja będzie używać domyślnych wartości z `docker-compose.prod.yml` (localhost:25).
 
 ### GitHub Actions (automatyczne)
 
