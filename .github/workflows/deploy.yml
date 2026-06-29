@@ -1,0 +1,26 @@
+name: Wdrożenie na serwer (Deploy)
+
+# Workflow uruchomi się tylko przy pushu na gałąź 'main'
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Połączenie SSH i wykonanie komend
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # Te zmienne pobieramy z bezpiecznych sekretów GitHuba
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          # Skrypt, który wykona się na serwerze:
+          script: |
+            cd /app/gra
+            make setup env=prod
