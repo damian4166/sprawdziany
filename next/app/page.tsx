@@ -127,7 +127,7 @@ export default function Home() {
   }, [role]);
 
   useEffect(() => {
-    if (role !== "student" || !quizState.questions[studentQuestionIndex]) {
+    if (role !== "student" || isTestFinished || !quizState.questions[studentQuestionIndex]) {
       return undefined;
     }
 
@@ -138,9 +138,14 @@ export default function Home() {
           window.clearInterval(timerId);
           setStatus(`Czas minął na pytanie: ${quizState.questions[studentQuestionIndex].text}`);
           setStudentAnswer("");
-          setStudentQuestionIndex((previousIndex) =>
-            previousIndex < quizState.questions.length - 1 ? previousIndex + 1 : previousIndex
-          );
+
+          if (studentQuestionIndex >= quizState.questions.length - 1) {
+            setIsTestFinished(true);
+            setTimeLeft(0);
+          } else {
+            setStudentQuestionIndex((previousIndex) => previousIndex + 1);
+          }
+
           return 0;
         }
 
@@ -149,7 +154,7 @@ export default function Home() {
     }, 1000);
 
     return () => window.clearInterval(timerId);
-  }, [role, quizState.questions, studentQuestionIndex]);
+  }, [role, quizState.questions, studentQuestionIndex, isTestFinished]);
 
   const handleAddQuestion = (event: FormEvent) => {
     event.preventDefault();
@@ -293,6 +298,15 @@ export default function Home() {
   };
 
   const currentStudentQuestion = quizState.questions[studentQuestionIndex];
+  const normalizedStudentId = studentId.trim();
+  const studentAnswers = quizState.answers.filter((answer) => answer.studentId === normalizedStudentId);
+  const totalQuestions = quizState.questions.length;
+  const correctAnswerCount = studentAnswers.filter((answer) => {
+    const question = quizState.questions.find((item) => item.id === answer.questionId);
+    return question ? isAnswerCorrect(question, answer.value) : false;
+  }).length;
+  const studentScorePercent = totalQuestions > 0 ? Math.round((correctAnswerCount / totalQuestions) * 100) : 0;
+
   const formatTimeLeft = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -518,6 +532,9 @@ export default function Home() {
                   <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-300">
                     <h3 className="text-lg font-semibold">Test zakończony</h3>
                     <p className="mt-2 text-sm">Dziękujemy za udział. Twoje odpowiedzi zostały zapisane.</p>
+                    <p className="mt-2 text-sm">
+                      Twój wynik: {correctAnswerCount} / {totalQuestions} ({studentScorePercent}%)
+                    </p>
                   </div>
                 ) : currentStudentQuestion ? (
                   <form onSubmit={handleSubmitAnswer} className="mt-4 space-y-3">
